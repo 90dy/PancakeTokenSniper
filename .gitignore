@@ -37,3 +37,6 @@ msbuild.wrn
 .vs/
 ASPNetScape/Properties/PublishProfiles/FolderProfile.pubxml
 NetScape.Modules.Messages/Generated/
+
+.fake
+*.log
