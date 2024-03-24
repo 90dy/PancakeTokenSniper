@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  creationTimestamp: null
+  name: pancake-token-sniper
+spec: {}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: pancake-token-sniper
+  name: pod-$User
+  labels:
+    run: pancake-token-sniper
+spec:
+  containers:
+  - image: 90dy/pancake-token-sniper:latest
+    name: container-$User
+    resources: {}
+    env:
+        - name: SniperConfiguration__WalletAddress
+          value: "$SniperConfiguration__WalletAddress"
+        - name: SniperConfiguration__WalletPrivateKey
+          value: "$SniperConfiguration__WalletPrivateKey"
+        - name: SniperConfiguration__BscHttpApi
+          value: "$SniperConfiguration__BscHttpApi"
+        - name: SniperConfiguration__BscNode
+          value: "$SniperConfiguration__BscNode"
+        - name: SniperConfiguration__BscScanApiKey
+          value: "$SniperConfiguration__BscScanApiKey"
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always

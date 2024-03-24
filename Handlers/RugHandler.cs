@@ -8,15 +8,18 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Json;
 using System.Numerics;
 using System.Threading.Tasks;
 
 namespace BscTokenSniper.Handlers
 {
+
     public class RugHandler
     {
         private readonly string GetSourceUrl = "https://api.bscscan.com/api?module=contract&action=getsourcecode&address={0}&apikey={1}";
         private readonly string RugdocCheckUrl = "https://honeypot.api.rugdoc.io/api/honeypotStatus.js?address={0}&chain=bsc";
+        private readonly string honeypotDotIsCheckUrl = "https://api.honeypot.is/v2/IsHoneypot?address={0}";
         private HttpClient _httpClient;
         private SniperConfiguration _sniperConfig;
         private readonly string _erc20Abi;
@@ -33,7 +36,7 @@ namespace BscTokenSniper.Handlers
 
         public async Task<bool> RugdocCheck(string token)
         {
-            if(!_sniperConfig.RugdocCheckEnabled)
+            if (!_sniperConfig.RugdocCheckEnabled)
             {
                 return true;
             }
@@ -53,10 +56,31 @@ namespace BscTokenSniper.Handlers
             }
         }
 
+        public async Task<bool> HoneypotDotIsCheck(string token)
+        {
+            if (!_sniperConfig.HoneypotDotIsCheckEnabled)
+            {
+                return true;
+            }
+            try
+            {
+                var response = await _httpClient.GetAsync(string.Format(honeypotDotIsCheckUrl, token));
+                var honeypotDotIsCheckResponse = await response.Content.ReadFromJsonAsync<HoneypotDotIsCheckResponse>();
+                var valid = !honeypotDotIsCheckResponse?.honeypotResult?.isHoneypot;
+                Serilog.Log.Logger.Information("Honeypot.is check token {0} Status: {1} Honeypot Response: {2}", token, valid, honeypotDotIsCheckResponse?.honeypotResult.isHoneypot);
+                return valid ?? false;
+            }
+            catch (Exception e)
+            {
+                Serilog.Log.Error(nameof(HoneypotDotIsCheck), e);
+                return false;
+            }
+        }
+
         public async Task<string> GetSymbol(PairCreatedEvent pairCreatedEvent)
         {
             var otherPairAddress = pairCreatedEvent.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ?
-                pairCreatedEvent.Token1 : pairCreatedEvent.Token0;
+                    pairCreatedEvent.Token1 : pairCreatedEvent.Token0;
             return await _bscWeb3.Eth.GetContract(_erc20Abi, otherPairAddress).GetFunction("symbol").CallAsync<string>();
         }
 
@@ -69,14 +93,15 @@ namespace BscTokenSniper.Handlers
             }
 
             var otherPairAddress = pairCreatedEvent.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ?
-                pairCreatedEvent.Token1 : pairCreatedEvent.Token0;
+                    pairCreatedEvent.Token1 : pairCreatedEvent.Token0;
             var otherPairIdx = pairCreatedEvent.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ?
-                1 : 0;
+                    1 : 0;
             Task<bool>[] rugCheckerTasks = new Task<bool>[] {
-                RugdocCheck(otherPairAddress),
-                CheckContractVerified(otherPairAddress),
-                CheckMinLiquidity(pairCreatedEvent, otherPairAddress, otherPairIdx)
-            };
+                                RugdocCheck(otherPairAddress),
+                                HoneypotDotIsCheck(otherPairAddress),
+                                CheckContractVerified(otherPairAddress),
+                                CheckMinLiquidity(pairCreatedEvent, otherPairAddress, otherPairIdx)
+                        };
             await Task.WhenAll(rugCheckerTasks);
             return rugCheckerTasks.All(t => t.IsCompletedSuccessfully && t.Result);
         }

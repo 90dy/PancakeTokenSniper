@@ -40,3 +40,10 @@ NetScape.Modules.Messages/Generated/
 
 .fake
 *.log
+
+# DotEnv
+.env
+.env.local
+.env.*.local
+
+*.sln

@@ -44,7 +44,8 @@ namespace BscTokenSniper.Handlers
         {
             try
             {
-                if (_ownedTokenList.Any(t => t.Address == tokenAddress)) {
+                if (_ownedTokenList.Any(t => t.Address == tokenAddress))
+                {
 
                     Log.Logger.Information("[CANNOT BUY] Token: {0} Cause: {1}", tokenAddress, "Already has token");
                     return false;
@@ -57,9 +58,9 @@ namespace BscTokenSniper.Handlers
                 var gas = new HexBigInteger(_sniperConfig.GasAmount);
                 var amount = new HexBigInteger(Web3.Convert.ToWei(amt));
                 var buyReturnValue = await buyFunction.SendTransactionAsync(_sniperConfig.WalletAddress, gas, amount, 0,
-                    new string[] { _sniperConfig.LiquidityPairAddress, tokenAddress },
-                    _sniperConfig.WalletAddress,
-                    (DateTime.UtcNow.Ticks + _sniperConfig.TransactionRevertTimeSeconds));
+                        new string[] { _sniperConfig.LiquidityPairAddress, tokenAddress },
+                        _sniperConfig.WalletAddress,
+                        (DateTime.UtcNow.Ticks + _sniperConfig.TransactionRevertTimeSeconds));
                 var reciept = await _bscWeb3.TransactionManager.TransactionReceiptService.PollForReceiptAsync(buyReturnValue, new CancellationTokenSource(TimeSpan.FromMinutes(2)));
                 var sellPrice = await GetMarketPrice(new TokensOwned
                 {
@@ -69,7 +70,7 @@ namespace BscTokenSniper.Handlers
                 Log.Logger.Information("[BUY] TX ID: {buyReturnValue} Reciept: {@reciept}", buyReturnValue, reciept);
 
                 var swapEventList = reciept.DecodeAllEvents<SwapEvent>().Where(t => t.Event != null)
-                    .Select(t => t.Event).ToList();
+                        .Select(t => t.Event).ToList();
                 var swapEvent = swapEventList.FirstOrDefault();
                 if (swapEvent != null)
                 {
@@ -93,7 +94,7 @@ namespace BscTokenSniper.Handlers
             }
             catch (Exception e)
             {
-                Log.Logger.Error("Error buying", e);
+                Log.Logger.Error("Error buying", e.Message.ToString());
                 return false;
             }
         }
@@ -134,7 +135,7 @@ namespace BscTokenSniper.Handlers
 
                 var txId = await sellFunction.SendTransactionAsync(new SwapExactTokensForETHSupportingFeeOnTransferTokensFunction
                 {
-                    AmountOutMin = slippage == 0 ? outAmount : (new Fraction(outAmount).Subtract(new Fraction(slippage/100.0).Multiply(outAmount)).ToBigInteger()),
+                    AmountOutMin = slippage == 0 ? outAmount : (new Fraction(outAmount).Subtract(new Fraction(slippage / 100.0).Multiply(outAmount)).ToBigInteger()),
                     AmountIn = amount,
                     Path = new List<string>() { tokenAddress, _sniperConfig.LiquidityPairAddress },
                     To = _sniperConfig.WalletAddress,
@@ -144,7 +145,7 @@ namespace BscTokenSniper.Handlers
                 Log.Logger.Information("[SELL] TX ID: {txId} Reciept: {@reciept}", txId, reciept);
 
                 var swapEventList = reciept.DecodeAllEvents<SwapEvent>().Where(t => t.Event != null)
-                    .Select(t => t.Event).ToList();
+                        .Select(t => t.Event).ToList();
                 var swapEvent = swapEventList.FirstOrDefault();
                 if (swapEvent != null)
                 {
@@ -190,12 +191,12 @@ namespace BscTokenSniper.Handlers
                 for (int i = _ownedTokenList.Count - 1; i >= 0; i--)
                 {
                     var ownedToken = _ownedTokenList[i];
-                    if(ownedToken.FailedSell || ownedToken.HoneypotCheck)
+                    if (ownedToken.FailedSell || ownedToken.HoneypotCheck)
                     {
                         continue;
                     }
                     var price = _rugChecker.GetReserves(ownedToken.PairAddress).Result;
-                    if(price.Reserve0 == 0 || price.Reserve1 == 0)
+                    if (price.Reserve0 == 0 || price.Reserve1 == 0)
                     {
                         continue;
                     }
@@ -203,14 +204,15 @@ namespace BscTokenSniper.Handlers
                     var currentPrice = GetMarketPrice(price, ownedToken, ownedToken.BnbAmount);
                     var profitPerc = new Fraction(currentPrice).Subtract(ownedToken.SinglePrice).Divide(ownedToken.SinglePrice).Multiply(100);
                     Log.Logger.Information("Token: {0} Price bought: {1} Current Price: {2} Current Profit: {3}%",
-                        ownedToken.Address, ((decimal)ownedToken.SinglePrice), ((decimal)currentPrice), ((decimal)profitPerc));
+                            ownedToken.Address, ((decimal)ownedToken.SinglePrice), ((decimal)currentPrice), ((decimal)profitPerc));
 
                     if (profitPerc > new Fraction(_sniperConfig.ProfitPercentageMargin))
                     {
                         try
                         {
                             ownedToken.FailedSell = !Sell(ownedToken.Address, ownedToken.Amount - 1, GetMarketPrice(ownedToken, ownedToken.Amount - 1).Result, _sniperConfig.SellSlippage).Result;
-                        } catch(Exception e)
+                        }
+                        catch (Exception e)
                         {
                             Serilog.Log.Logger.Error(nameof(MonitorPrices), e);
                             ownedToken.FailedSell = true;
