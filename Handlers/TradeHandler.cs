@@ -5,6 +5,7 @@ using Nethereum.Contracts;
 using Nethereum.Hex.HexTypes;
 using Nethereum.Web3;
 using Nethereum.Web3.Accounts;
+using Newtonsoft.Json;
 using Serilog;
 using System;
 using System.Collections.Generic;
@@ -38,6 +39,34 @@ namespace BscTokenSniper.Handlers
             _pancakeContract = _bscWeb3.Eth.GetContract(File.ReadAllText("./Abis/Pancake.json"), _sniperConfig.PancakeswapRouterAddress);
             _rugChecker = rugChecker;
             Start();
+        }
+
+        private async Task<List<TokensOwned>> RetrieveOwnedTokens()
+        {
+            var address = _sniperConfig.WalletAddress;
+            var client = new HttpClient();
+            var requestUri = $"https://api.bscscan.com/api?module=account&action=tokentx&address={address}&startblock=0&endblock=999999999&sort=asc&apikey={_sniperConfig.BscScanApikey}";
+            var response = await client.GetAsync(requestUri);
+            response.EnsureSuccessStatusCode();
+            var content = await response.Content.ReadAsStringAsync();
+            var transactions = JsonConvert.DeserializeObject<BscScanResponse>(content);
+            var ownedTokens = new List<TokensOwned>();
+
+            foreach (var tx in transactions.result.Distinct())
+            {
+                var tokenContract = _bscWeb3.Eth.GetContract(_erc20Abi, tx.contractAddress);
+                var balanceFunction = tokenContract.GetFunction("balanceOf");
+                var balance = await balanceFunction.CallAsync<BigInteger>(address);
+
+                ownedTokens.Add(new TokensOwned
+                {
+                    Address = tx.contractAddress,
+                    Amount = balance,
+                    PairAddress = tx.to,
+                });
+            }
+
+            return ownedTokens;
         }
 
         public async Task<bool> Buy(string tokenAddress, int tokenIdx, string pairAddress, double amt, bool honeypotCheck = false)
@@ -119,7 +148,7 @@ namespace BscTokenSniper.Handlers
             }
             catch (Exception e)
             {
-                Serilog.Log.Logger.Warning("Could not approve sell for {0}", tokenAddress);
+                Serilog.Log.Logger.Warning("Could not approve sell for {0}: {1}", tokenAddress, e.Message.ToString());
             }
             return true;
         }
@@ -179,8 +208,10 @@ namespace BscTokenSniper.Handlers
             return GetMarketPrice(price, ownedToken, amount);
         }
 
-        public void Start()
+        async public void Start()
         {
+            Log.Information("Retrieving owned tokens");
+            _ownedTokenList = await RetrieveOwnedTokens();
             new Thread(new ThreadStart(MonitorPrices)).Start();
         }
 
