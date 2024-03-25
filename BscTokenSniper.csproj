@@ -35,10 +35,16 @@
     <None Update="Abis\Pair.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="Abis\PairCreated.json">
+    <None Update="Abis\PancakeFactoryV2.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="Abis\Pancake.json">
+    <None Update="Abis\PancakeRouterV2.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+        <None Update="Abis\PancakeFactoryV3.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Abis\PancakeRouterV3.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="appsettings.json">

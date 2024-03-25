@@ -49,7 +49,7 @@ namespace BscTokenSniper
                     services.Configure<SniperConfiguration>(config.GetSection("SniperConfiguration"));
                     services.AddHostedService<SniperService>();
                     // Add a basic HTTP server for docker container in scaleway
-                    services.AddHostedService<WebHostService>();
+                    // services.AddHostedService<WebHostService>();
                 });
 
     }

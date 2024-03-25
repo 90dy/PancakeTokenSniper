@@ -7,10 +7,10 @@ This is a free project but any funding is appricated.
 ETH/BNB: 0x71f74dEbb7fd42E61de32256537284E06DE8812d
 
 ## Socials
-Telegram: https://t.me/PancakeTokenSniper
+Telegram: https://t.me/BscTokenSniper
 
 ## Prerequisites
-* [Net8.0](https://dotnet.microsoft.com/download/dotnet/8.0) (Only need this if you are trying to run the code otherwise please see [releases](https://github.com/JayArrowz/PancakeTokenSniper/releases) it provides binaries)
+* [Net8.0](https://dotnet.microsoft.com/download/dotnet/8.0) (Only need this if you are trying to run the code otherwise please see [releases](https://github.com/JayArrowz/BscTokenSniper/releases) it provides binaries)
 
 ## Config
 The Config is listed in `appsettings.json` There are values which you will have to set yourself, these are denoted with `xxx`.
@@ -27,7 +27,7 @@ Remember `BscNode` should be WS mainnet Endpoints and `BscHttpApi` should be Htt
 The BSC Scan API key is obtained for free from https://bscscan.com/myapikey
 
 ## Running the project
-If you want to run the project you can go to [releases](https://github.com/JayArrowz/PancakeTokenSniper/releases) and a binary that will execute on your OS, or install Net5.0 then compile and run the application. You can use `dotnet run PancakeTokenSniper` to do this.
+If you want to run the project you can go to [releases](https://github.com/JayArrowz/BscTokenSniper/releases) and a binary that will execute on your OS, or install Net5.0 then compile and run the application. You can use `dotnet run BscTokenSniper` to do this.
 
 ## Rug Checks
 There are specific checks involved that this sniper does when buying tokens. Some config values in appsettings.json inside `SniperConfiguration` are used to influence the rug checks. You can disable the Rug checks by setting the `RugCheckEnabled` to false. Be warned this is dangerous.
@@ -55,13 +55,13 @@ Please read [CONTRIBUTING.md](https://gist.github.com/PurpleBooth/b24679402957c6
 
 ## Versioning
 
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/JayArrowz/PancakeTokenSniper/tags).
+We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/JayArrowz/BscTokenSniper/tags).
 
 ## Authors
 
 * **JayArrowz** - [JayArrowz](https://github.com/JayArrowz)
 
-See also the list of [contributors](https://github.com/JayArrowz/PancakeTokenSniper/contributors) who participated in this project.
+See also the list of [contributors](https://github.com/JayArrowz/BscTokenSniper/contributors) who participated in this project.
 
 ## TODO
 - Support Uniswap and other liquidity providers

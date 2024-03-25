@@ -4,7 +4,7 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /app
 
 # Copy the project file
-COPY *.csproj ./
+COPY BscTokenSniper.csproj ./
 
 # Restore the project
 RUN dotnet restore
@@ -15,7 +15,6 @@ COPY Handlers ./Handlers
 COPY Models ./Models
 COPY Properties ./Properties
 COPY Services ./Services
-COPY PancakeTokenSniper.csproj ./
 COPY Program.cs ./
 COPY appsettings.json ./
 
@@ -46,4 +45,4 @@ WORKDIR /app
 COPY --from=build /app/build ./
 
 # Set the entry point
-ENTRYPOINT ["dotnet", "PancakeTokenSniper.dll"]
+ENTRYPOINT ["dotnet", "BscTokenSniper.dll"]

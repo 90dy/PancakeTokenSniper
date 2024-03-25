@@ -167,7 +167,7 @@ namespace BscTokenSniper.Handlers
 
             if (_sniperConfig.CheckRouterAddressInContract)
             {
-                if (!srcCode.Contains(_sniperConfig.PancakeswapRouterAddress) && !srcCode.Contains(_sniperConfig.V1PancakeswapRouterAddress))
+                if (!srcCode.Contains(_sniperConfig.V2PancakeswapRouterAddress) && !srcCode.Contains(_sniperConfig.V2PancakeswapRouterAddress) && !srcCode.Contains(_sniperConfig.V1PancakeswapRouterAddress))
                 {
                     Serilog.Log.Logger.Information("Pancake swap router is invalid for token {0}", otherTokenAddress);
                     return false;

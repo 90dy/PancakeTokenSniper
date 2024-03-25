@@ -40,7 +40,7 @@ namespace BscTokenSniper
         {
             _sniperConfig = options.Value;
             _bscWeb3 = new Web3(url: _sniperConfig.BscHttpApi, account: new Account(_sniperConfig.WalletPrivateKey));
-            _factoryContract = _bscWeb3.Eth.GetContract(File.ReadAllText("./Abis/PairCreated.json"), _sniperConfig.PancakeswapFactoryAddress);
+            _factoryContract = _bscWeb3.Eth.GetContract(File.ReadAllText("./Abis/PancakeFactoryV2.json"), _sniperConfig.V2PancakeswapFactoryAddress);
             _rugChecker = rugChecker;
             _tradeHandler = tradeHandler;
         }
@@ -58,17 +58,19 @@ namespace BscTokenSniper
         private async Task<EthLogsObservableSubscription> StartClient()
         {
             _client = new StreamingWebSocketClient(_sniperConfig.BscNode);
-            var filter = _bscWeb3.Eth.GetEvent<PairCreatedEvent>(_sniperConfig.PancakeswapFactoryAddress).CreateFilterInput();
+            var filter = _bscWeb3.Eth.GetEvent<PairCreatedEvent>(_sniperConfig.V2PancakeswapFactoryAddress).CreateFilterInput();
             var filterTransfers = Event<PairCreatedEvent>.GetEventABI().CreateFilterInput();
-            filterTransfers.Address = new string[1] { _sniperConfig.PancakeswapFactoryAddress };
+            filterTransfers.Address = new string[1] { _sniperConfig.V2PancakeswapFactoryAddress };
 
-            var subscription = new EthLogsObservableSubscription(_client);
-            _disposables.Add(subscription.GetSubscriptionDataResponsesAsObservable().Subscribe(t =>
+            var ethLogs = new EthLogsObservableSubscription(_client);
+            // Subscribe to the PairCreated event
+            _disposables.Add(ethLogs.GetSubscriptionDataResponsesAsObservable().Subscribe(ethLog =>
             {
                 try
                 {
-                    var decodedEvent = t.DecodeEvent<PairCreatedEvent>();
-                    _ = PairCreated(decodedEvent).ConfigureAwait(false);
+                    Log.Information("PairCreatedEvent Found from EthLogs subscription: {@ethLog}", ethLog);
+                    var decodedEvent = ethLog.DecodeEvent<PairCreatedEvent>();
+                    _ = PairCreatedEventHandler(decodedEvent).ConfigureAwait(false);
                 }
                 catch (Exception e)
                 {
@@ -76,35 +78,41 @@ namespace BscTokenSniper
                 }
             }));
 
+            // Add Liquidity Block Processor
+            // This is used to detect new liquidity being added and will trigger the PairCreatedEventHandler
             _addLiquidityBlockProcessor = _bscWeb3.Processing.Blocks.CreateBlockProcessor(steps =>
             {
                 //match the to address and function signature
-                steps.TransactionStep.SetMatchCriteria(t =>
-                    t.Transaction.IsTo(_sniperConfig.PancakeswapRouterAddress) &&
-                t.Transaction.IsTransactionForFunctionMessage<AddLiquidityETHFunction>());
+                steps.TransactionStep.SetMatchCriteria(tx =>
+                    tx.Transaction.IsTo(_sniperConfig.V2PancakeswapRouterAddress) &&
+                    tx.Transaction.IsTransactionForFunctionMessage<AddLiquidityETHFunction>());
 
-                steps.TransactionStep.AddProcessorHandler(l => NewAddLiquidityEvent(l));
+                steps.TransactionStep.AddProcessorHandler(async tx =>
+                {
+                    Log.Information("New AddLiquidityTransaction Found from blocks: {@l}", tx.GetHashCode());
+                    await NewAddLiquidityTransactionHandler(tx);
+                });
             });
 
             await _client.StartAsync();
-            await subscription.SubscribeAsync(filter);
-            return subscription;
+            await ethLogs.SubscribeAsync(filter);
+            return ethLogs;
         }
 
-        private async Task NewAddLiquidityEvent(TransactionVO l)
+        private async Task NewAddLiquidityTransactionHandler(TransactionVO tx)
         {
-            var addLiquidityEvent = l.Transaction.DecodeTransactionToFunctionMessage<AddLiquidityETHFunction>();
-            var getPairFunction= _factoryContract.GetFunction("getPair");
-            Log.Logger.Information("Add Liquidity Event detected: {@addLiquidityEvent}", addLiquidityEvent);
-            var pairAddress = await getPairFunction.CallAsync<string>(_sniperConfig.LiquidityPairAddress, addLiquidityEvent.Token);
+            var AddLiquidityTransaction = tx.Transaction.DecodeTransactionToFunctionMessage<AddLiquidityETHFunction>();
+            var getPairFunction = _factoryContract.GetFunction("getPair");
+            Log.Logger.Information("New AddLiquidityTransation detected: {@AddLiquidityTransaction}", AddLiquidityTransaction);
+            var pairAddress = await getPairFunction.CallAsync<string>(_sniperConfig.LiquidityPairAddress, AddLiquidityTransaction.Token);
             var newPair = new PairCreatedEvent
             {
-                Amount = addLiquidityEvent.AmountETHMin,
+                Amount = AddLiquidityTransaction.AmountETHMin,
                 Pair = pairAddress,
                 Token0 = _sniperConfig.LiquidityPairAddress,
-                Token1 = addLiquidityEvent.Token
+                Token1 = AddLiquidityTransaction.Token
             };
-            await PairCreated(newPair);
+            await PairCreatedEventHandler(newPair);
         }
 
         private BigInteger _currentBlock = BigInteger.Zero;
@@ -143,44 +151,50 @@ namespace BscTokenSniper
             new Thread(KeepAliveClient).Start();
         }
 
-        private async Task PairCreated(EventLog<PairCreatedEvent> pairCreated)
+        private async Task PairCreatedEventHandler(EventLog<PairCreatedEvent> pairCreated)
         {
             try
             {
                 var pair = pairCreated.Event;
-                await PairCreated(pair);
+                await PairCreatedEventHandler(pair);
             }
             catch (Exception e)
             {
-                Log.Logger.Error(nameof(PairCreated), e);
+                Log.Logger.Error(nameof(PairCreatedEventHandler), e);
             }
         }
 
-        private async Task PairCreated(PairCreatedEvent pair)
+
+        // This method is called when the PairCreated event is detected
+        // It will check if the token is a rug, honeypot, or whitelist token
+        private async Task PairCreatedEventHandler(PairCreatedEvent pair)
         {
+
             var otherPairAddress = pair.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ? pair.Token1 : pair.Token0;
             var symbol = await _rugChecker.GetSymbol(pair);
             pair.Symbol = symbol;
 
+            // Is token in whitelist
             var addressWhitelisted = _sniperConfig.WhitelistedTokens.Any(t => t.Equals(otherPairAddress));
-            if(_sniperConfig.OnlyBuyWhitelist && !addressWhitelisted)
+            if (_sniperConfig.OnlyBuyWhitelist && !addressWhitelisted)
             {
                 Log.Logger.Warning("Address is not in the whitelist blocked {0}", otherPairAddress);
                 return;
             }
-
 
             var rugCheckPassed = _sniperConfig.RugCheckEnabled && !addressWhitelisted ? await _rugChecker.CheckRugAsync(pair) : true;
             var otherTokenIdx = pair.Token0.Equals(_sniperConfig.LiquidityPairAddress, StringComparison.InvariantCultureIgnoreCase) ? 1 : 0;
             var honeypotCheck = !addressWhitelisted && _sniperConfig.HoneypotCheck;
 
             Log.Logger.Information("Discovered Token Pair {0} Rug check Result: {1} Contract address: {2}", symbol, rugCheckPassed, otherPairAddress);
+            // If the rug check fails, we will not buy the token
             if (!rugCheckPassed)
             {
                 Log.Logger.Warning("Rug Check failed for {0}", symbol);
                 return;
             }
 
+            // If the honeypot check is enabled, we will check if the token is a honeypot
             if (!honeypotCheck)
             {
                 if (!addressWhitelisted)
@@ -194,6 +208,7 @@ namespace BscTokenSniper
                 await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.AmountToSnipe);
                 return;
             }
+
             Log.Logger.Information("Starting Honeypot check for {0} with amount {1}", symbol, _sniperConfig.HoneypotCheckAmount);
             var buySuccess = await _tradeHandler.Buy(otherPairAddress, otherTokenIdx, pair.Pair, _sniperConfig.HoneypotCheckAmount, true);
             if (!buySuccess)
