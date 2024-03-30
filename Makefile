@@ -45,7 +45,7 @@ delete:
 
 .PHONY: logs
 logs:
-	kubectl logs -l app=pancake-token-sniper -f
+	kubectl -n pancake-token-sniper logs -l app=pancake-token-sniper -f
 
 .PHONY: shell
 shell:
